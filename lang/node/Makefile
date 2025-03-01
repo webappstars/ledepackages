@@ -6,44 +6,17 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=node
 
-ifeq ($(CONFIG_NODEJS_22),y)
-PKG_VERSION:=v22.13.1
-PKG_RELEASE:=1
-PKG_HASH:=cfce282119390f7e0c2220410924428e90dadcb2df1744c0c4a0e7baae387cc2
-PATCH_DIR:=./patches/v22.x
-else
-ifeq ($(CONFIG_NODEJS_20),y)
-PKG_VERSION:=v20.18.2
-PKG_RELEASE:=1
-PKG_HASH:=69bf81b70f3a95ae0763459f02860c282d7e3a47567c8afaf126cc778176a882
-PATCH_DIR:=./patches/v20.x
-else
-ifeq ($(CONFIG_NODEJS_18),y)
-PKG_VERSION:=v18.15.0
-PKG_RELEASE:=1
-PKG_HASH:=8e44d65018ff973284195c23186469a0ea4082e97ec4200e5f5706d5584daa37
-PATCH_DIR:=./patches/v18.x
-else
-ifeq ($(CONFIG_NODEJS_16),y)
-PKG_VERSION:=v16.19.1
-PKG_RELEASE:=1
-PKG_HASH:=17fb716406198125b30c94dd3d1756207b297705626afe16d8dc479a65a1d8b5
-PATCH_DIR:=./patches/v16.x
-else
+
 ifeq ($(CONFIG_NODEJS_14),y)
-PKG_VERSION:=v14.21.3
+PKG_VERSION:=v14.20.0
 PKG_RELEASE:=1
-PKG_HASH:=458ec092e60ad700ddcf079cb63d435c15da4c7bb3d3f99b9a8e58a99e54075e
+PKG_HASH:=2b5098498889d1e6a9709d63f3d6f94e696a5ad8221618c5d51159cee363996a
 PATCH_DIR:=./patches/v14.x
 else
 PKG_VERSION:=v12.22.12
-PKG_RELEASE:=2
+PKG_RELEASE:=1
 PKG_HASH:=bc42b7f8495b9bfc7f7850dd180bb02a5bdf139cc232b8c6f02a6967e20714f2
 PATCH_DIR:=./patches/v12.x
-endif
-endif
-endif
-endif
 endif
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
@@ -72,9 +45,9 @@ define Package/node
   SUBMENU:=Node.js
   TITLE:=Node.js is a platform built on Chrome's JavaScript runtime
   URL:=https://nodejs.org/
-  DEPENDS:=@(HAS_FPU||KERNEL_MIPS_FPU_EMULATOR||SOFT_FLOAT) @!arc @!armeb @!powerpc \
-	   +libstdcpp +(NODEJS_18||NODEJS_20||NODEJS_22):libopenssl +zlib +libnghttp2 +libuv \
-	   +libcares +libatomic +NODEJS_ICU_SYSTEM:icu +NODEJS_ICU_SYSTEM:icu-full-data
+  DEPENDS:=@(HAS_FPU||KERNEL_MIPS_FPU_EMULATOR) @!arc @!armeb @!powerpc \
+	   +libstdcpp +libopenssl +zlib +libnghttp2 \
+	   +libatomic +NODEJS_ICU_SYSTEM:icu +NODEJS_ICU_SYSTEM:icu-full-data
 endef
 
 define Package/node/description
@@ -104,67 +77,44 @@ endef
 
 define Package/node/config
 	menu "Configuration"
+		depends on PACKAGE_node
 
 	choice
 		prompt "Version Selection"
-		default NODEJS_12 if mips||mipsel||mips64||mips64el
-		default NODEJS_20
+		default NODEJS_12
 		help
 		 Select node.js version.
-		 The host package version is also the same.
 
 		config NODEJS_12
-			bool "12.x End-of-life : Only for MIPS"
+			bool "12.x End-of-life : NO LONGER SUPPORTED"
 
 		config NODEJS_14
-			depends on !(mips||mipsel||mips64||mips64el)
-			bool "14.x End-of-Life"
-
-		config NODEJS_16
-			depends on !(mips||mipsel||mips64||mips64el)
-			bool "16.x End-of-Life"
-
-		config NODEJS_18
-			depends on !(mips||mipsel||mips64||mips64el)
-			bool "18.x Maintenance LTS"
-			
-		config NODEJS_20
-			depends on !(mips||mipsel||mips64||mips64el)
-			bool "20.x Active LTS"
-			
-		config NODEJS_22
-			depends on !(mips||mipsel||mips64||mips64el)
-			bool "22.x Active LTS"
+			depends on !(mips||mips64)
+			bool "14.x Maintenance LTS"
 	endchoice
 
-	if PACKAGE_node
-		choice
-			prompt "i18n features"
-			default NODEJS_ICU_SMALL
-			help
-			 Select i18n features
+	choice
+		prompt "i18n features"
+		default NODEJS_ICU_NONE
+		help
+		 Select i18n features
 
-			config NODEJS_ICU_NONE
-				bool "Disable"
+		config NODEJS_ICU_NONE
+			bool "Disable"
 
-			config NODEJS_ICU_SMALL
-				depends on !BIG_ENDIAN
-				bool "small-icu"
+		config NODEJS_ICU_SMALL
+			depends on !BIG_ENDIAN
+			bool "small-icu"
 
-			config NODEJS_ICU_SYSTEM
-				depends on ARCH_64BIT&&!BIG_ENDIAN
-				bool "system-icu"
-		endchoice
-	endif
+		config NODEJS_ICU_SYSTEM
+			depends on ARCH_64BIT&&!BIG_ENDIAN
+			bool "system-icu"
+	endchoice
 
 	endmenu
 endef
 
 NODEJS_CPU:=$(subst powerpc,ppc,$(subst aarch64,arm64,$(subst x86_64,x64,$(subst i386,ia32,$(ARCH)))))
-
-ifeq ($(CONFIG_NODEJS_10),y)
-TARGET_LDFLAGS+=-latomic
-endif
 
 ifneq ($(CONFIG_ARCH_64BIT),y)
 FORCE_32BIT:=-m32
@@ -172,11 +122,10 @@ endif
 
 MAKE_VARS+= \
 	DESTCPU=$(NODEJS_CPU) \
-	NO_LOAD='cctest.target.mk embedtest.target.mk node_mksnapshot.target.mk overlapped-checker.target.mk \
-		mkcodecache.target.mk tools/v8_gypfiles/torque_base.target.mk tools/v8_gypfiles/v8_init.target.mk' \
+	NO_LOAD='cctest.target.mk embedtest.target.mk node_mksnapshot.target.mk' \
 	LD_LIBRARY_PATH=$(STAGING_DIR_HOSTPKG)/share/icu/current/lib
 
-HOST_MAKE_VARS+=NO_LOAD='cctest.target.mk embedtest.target.mk overlapped-checker.target.mk'
+HOST_MAKE_VARS+=NO_LOAD='cctest.target.mk embedtest.target.mk'
 
 CONFIGURE_VARS:= \
 	CC="$(TARGET_CC) $(TARGET_OPTIMIZATION)" \
@@ -191,7 +140,6 @@ CONFIGURE_ARGS:= \
 	--shared-zlib \
 	--shared-openssl \
 	--shared-nghttp2 \
-	--shared-cares \
 	--with-intl=$(if $(CONFIG_NODEJS_ICU_SMALL),small-icu,$(if $(CONFIG_NODEJS_ICU_SYSTEM),system-icu,none)) \
 	$(if $(findstring mips,$(NODEJS_CPU)), \
 		$(if $(CONFIG_SOFT_FLOAT),--with-mips-float-abi=soft)) \
@@ -230,14 +178,14 @@ define Package/node-npm/install
 	$(LN) ../lib/node_modules/npm/bin/npx-cli.js $(1)/usr/bin/npx
 endef
 
-define Host/Install
-	$(RM) -rf $(1)/lib/node_modules/npm
-	$(call Host/Install/Default)
-endef
-
 define Package/node-npm/postrm
 #!/bin/sh
 rm -rf /usr/lib/node_modules/npm || true
+endef
+
+define Host/Install
+	$(RM) -rf $(1)/lib/node_modules/npm
+	$(call Host/Install/Default)
 endef
 
 $(eval $(call HostBuild))
